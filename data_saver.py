@@ -1,18 +1,22 @@
-import os, requests, pandas as pd
+import os
+import requests
+import pandas as pd
 from datetime import datetime, timedelta
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-def collect_season_data(seasons_back=5):
+def collect_season_data(seasons_back=5, progress_cb=None):
     """
     Collect all NBA games from ESPN open API for past N seasons.
-    Now handles ESPN scoreboard endpoint's daily cap using &limit=200&groups=50
-    and de-duplicates games.
+    Now handles ESPN scoreboard endpoint's daily cap using &limit=200&groups=50.
+    Shows progress with optional callback (for Streamlit progress bar).
     """
     all_games = []
     today = datetime.today()
     start_year = today.year - seasons_back
+    seasons_collected = 0
+    total_seasons = (today.year + 1) - start_year
 
     try:
         for season in range(start_year, today.year + 1):
@@ -20,15 +24,17 @@ def collect_season_data(seasons_back=5):
             start = datetime(season, 10, 1)
             end = datetime(season + 1, 7, 1)
             date = start
+            games_this_season = 0
+
             while date <= end:
                 date_str = date.strftime("%Y%m%d")
-                # ESPN's endpoint: limit=200 returns all results per day, &groups=50 helps for NBA
                 url = (
                     f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/"
                     f"scoreboard?dates={date_str}&limit=200&groups=50"
                 )
                 resp = requests.get(url, timeout=15)
                 if resp.status_code == 200:
+                    games_today = 0
                     for evt in resp.json().get("events", []):
                         try:
                             comp = evt["competitions"][0]
@@ -43,11 +49,19 @@ def collect_season_data(seasons_back=5):
                                 "away_score": away.get("score", 0),
                                 "status": evt["status"]["type"]["description"]
                             })
+                            games_today += 1
                         except Exception:
                             continue
+                    games_this_season += games_today
                 else:
                     print(f"⚠️ Skipped {date_str} — HTTP {resp.status_code}")
+
                 date += timedelta(days=1)
+
+            print(f"Season {season}-{season+1} collected {games_this_season} games.")
+            seasons_collected += 1
+            if progress_cb:
+                progress_cb(seasons_collected / total_seasons)
 
         df = pd.DataFrame(all_games)
         # ESPN can sometimes duplicate game ids for playback; ensure no duplicates
