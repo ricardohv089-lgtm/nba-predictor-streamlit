@@ -1,27 +1,27 @@
 import os, requests, pandas as pd
 from datetime import datetime, timedelta
 
-DATA_DIR = "data"
+# Permanent dataset directory within repo
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def collect_season_data(seasons_back=5):
     """
     Collect all NBA games from ESPN open API for past N seasons.
-    Each ESPN season spans Oct–Jun. Saves results as CSV per season.
+    Automatically saves the CSV inside ./data/ folder (persistent in GitHub repo).
     """
-    try:
-        today = datetime.today()
-        start_year = today.year - seasons_back
-        all_games = []
+    all_games = []
+    today = datetime.today()
+    start_year = today.year - seasons_back
 
+    try:
         for season in range(start_year, today.year + 1):
-            # Pull every day between Oct 1 and July 1
+            print(f"Fetching season {season}-{season+1} ...")
             start = datetime(season, 10, 1)
             end = datetime(season + 1, 7, 1)
-            current = start
-            print(f"Fetching season {season}-{season+1}")
-            while current <= end:
-                date_str = current.strftime("%Y%m%d")
+            date = start
+            while date <= end:
+                date_str = date.strftime("%Y%m%d")
                 url = f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={date_str}"
                 resp = requests.get(url, timeout=10)
                 if resp.status_code == 200:
@@ -38,13 +38,15 @@ def collect_season_data(seasons_back=5):
                             "away_score": away.get("score", 0),
                             "status": evt["status"]["type"]["description"]
                         })
-                current += timedelta(days=1)
+                date += timedelta(days=1)
 
+        # build dataframe & save
         df = pd.DataFrame(all_games)
-        out_path = os.path.join(DATA_DIR, "nba_games_5yr.csv")
-        df.to_csv(out_path, index=False)
-        print(f"✅ Data saved to {out_path}, total games: {len(df)}")
+        saved_file = os.path.join(DATA_DIR, "nba_games_5yr.csv")
+        df.to_csv(saved_file, index=False)
+        print(f"✅ Saved {len(df)} games to {saved_file}")
         return df
+
     except Exception as e:
-        print("Collect error:", e)
+        print(f"Data collection failed: {e}")
         return pd.DataFrame()
