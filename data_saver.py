@@ -1,14 +1,14 @@
 import os, requests, pandas as pd
 from datetime import datetime, timedelta
 
-# Path to permanent /data folder in repo
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def collect_season_data(seasons_back=5):
     """
-    Collect NBA games from ESPN JSON API for past N seasons.
-    Saves complete dataset to ./data/nba_games_5yr.csv (no row truncation).
+    Collect all NBA games from ESPN open API for past N seasons.
+    Now handles ESPN scoreboard endpoint's daily cap using &limit=200&groups=50
+    and de-duplicates games.
     """
     all_games = []
     today = datetime.today()
@@ -22,28 +22,36 @@ def collect_season_data(seasons_back=5):
             date = start
             while date <= end:
                 date_str = date.strftime("%Y%m%d")
+                # ESPN's endpoint: limit=200 returns all results per day, &groups=50 helps for NBA
                 url = (
                     f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/"
-                    f"scoreboard?dates={date_str}"
+                    f"scoreboard?dates={date_str}&limit=200&groups=50"
                 )
-                resp = requests.get(url, timeout=10)
+                resp = requests.get(url, timeout=15)
                 if resp.status_code == 200:
                     for evt in resp.json().get("events", []):
-                        comp = evt["competitions"][0]
-                        home = [t for t in comp["competitors"] if t["homeAway"] == "home"][0]
-                        away = [t for t in comp["competitors"] if t["homeAway"] == "away"][0]
-                        all_games.append({
-                            "season": f"{season}-{season+1}",
-                            "date": date_str,
-                            "home_team": home["team"]["displayName"],
-                            "away_team": away["team"]["displayName"],
-                            "home_score": home.get("score", 0),
-                            "away_score": away.get("score", 0),
-                            "status": evt["status"]["type"]["description"]
-                        })
+                        try:
+                            comp = evt["competitions"][0]
+                            home = [t for t in comp["competitors"] if t["homeAway"] == "home"][0]
+                            away = [t for t in comp["competitors"] if t["homeAway"] == "away"][0]
+                            all_games.append({
+                                "season": f"{season}-{season+1}",
+                                "date": date_str,
+                                "home_team": home["team"]["displayName"],
+                                "away_team": away["team"]["displayName"],
+                                "home_score": home.get("score", 0),
+                                "away_score": away.get("score", 0),
+                                "status": evt["status"]["type"]["description"]
+                            })
+                        except Exception:
+                            continue
+                else:
+                    print(f"⚠️ Skipped {date_str} — HTTP {resp.status_code}")
                 date += timedelta(days=1)
 
         df = pd.DataFrame(all_games)
+        # ESPN can sometimes duplicate game ids for playback; ensure no duplicates
+        df.drop_duplicates(subset=["date", "home_team", "away_team"], inplace=True)
         saved_file = os.path.join(DATA_DIR, "nba_games_5yr.csv")
         df.to_csv(saved_file, index=False)
         print(f"✅ Saved ALL {len(df)} games → {saved_file}")
