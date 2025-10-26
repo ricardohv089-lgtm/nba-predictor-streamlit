@@ -1,65 +1,61 @@
-import requests
-import pandas as pd
+import os, sys, requests, pandas as pd
 from nba_api.stats.endpoints import leaguegamefinder
 
+# --- Ensure module can always be found (both locally & on Streamlit Cloud)
+file_dir = os.path.dirname(__file__)
+sys.path.append(file_dir)
+
 # -------------------------------
-# 1. Fetch Current ESPN Live Scoreboard
+# 1. ESPN Live Scoreboard (public)
 # -------------------------------
 def get_live_scoreboard():
-    """
-    Fetch live or upcoming NBA games from ESPN's open API.
-    Works without auth, showing current day's matchups, status, and scores.
-    """
+    """Fetch real or upcoming NBA matchups from ESPN's open API."""
     url = "https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
     try:
         resp = requests.get(url, timeout=10)
-        data = resp.json().get("events", [])
+        events = resp.json().get("events", [])
         games = []
-        for event in data:
-            competitors = event["competitions"][0]["competitors"]
-            home = competitors[0] if competitors[0]["homeAway"] == "home" else competitors[1]
-            away = competitors[1] if home == competitors[0] else competitors[0]
+        for evt in events:
+            comp = evt["competitions"][0]
+            home = [t for t in comp["competitors"] if t["homeAway"] == "home"][0]
+            away = [t for t in comp["competitors"] if t["homeAway"] == "away"][0]
             games.append({
                 "home_team": home["team"]["displayName"],
                 "away_team": away["team"]["displayName"],
-                "status": event["status"]["type"]["description"],
-                "start_time": event.get("date", "")[:19].replace("T", " "),
-                "home_score": home.get("score", "0"),
-                "away_score": away.get("score", "0")
+                "status": evt["status"]["type"]["description"],
+                "start_time": evt["date"][:19].replace("T", " "),
+                "home_score": home.get("score", 0),
+                "away_score": away.get("score", 0)
             })
         return pd.DataFrame(games)
     except Exception as e:
-        print("Error fetching ESPN scoreboard:", e)
+        print("ESPN fetch error:", e)
         return pd.DataFrame()
 
 # -------------------------------
-# 2. Fetch Recent Games (Official NBA.com)
+# 2. NBA.com official data
 # -------------------------------
 def get_team_recent_games(team_id, season="2024-25"):
-    """
-    Official NBA.com stats feed using nba_api.
-    Returns recent 10 games for the selected team.
-    """
+    """Return last 10 games for given team from NBA.com stats feed."""
     try:
-        games = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_id, season_nullable=season)
-        df = games.get_data_frames()[0]
-        df = df.head(10)[["GAME_DATE", "MATCHUP", "WL", "PTS", "REB", "AST", "PLUS_MINUS"]]
-        return df
+        df = leaguegamefinder.LeagueGameFinder(
+            team_id_nullable=team_id,
+            season_nullable=season
+        ).get_data_frames()[0]
+        needed = ["GAME_DATE", "MATCHUP", "WL", "PTS", "REB", "AST", "PLUS_MINUS"]
+        return df.head(10)[needed]
     except Exception as e:
-        print("Error fetching NBA.com data:", e)
+        print("NBA.com fetch error:", e)
         return pd.DataFrame()
 
 # -------------------------------
-# 3. Fetch Historical Games (BallDontLie)
+# 3. BallDontLie Historical
 # -------------------------------
-def get_historical_games(limit=15):
-    """
-    Pull real historical NBA game results from BallDontLie.io (no API key).
-    """
+def get_historical_games(limit=20):
+    """Pull real historical NBA games from BallDontLie.io."""
     url = f"https://www.balldontlie.io/api/v1/games?per_page={limit}"
     try:
-        resp = requests.get(url, timeout=10)
-        data = resp.json().get("data", [])
+        res = requests.get(url, timeout=10)
         games = [{
             "date": g["date"][:10],
             "home_team": g["home_team"]["full_name"],
@@ -67,8 +63,8 @@ def get_historical_games(limit=15):
             "home_score": g["home_team_score"],
             "away_score": g["visitor_team_score"],
             "status": g["status"]
-        } for g in data]
+        } for g in res.json().get("data", [])]
         return pd.DataFrame(games)
     except Exception as e:
-        print("Error fetching BallDontLie data:", e)
+        print("BallDontLie fetch error:", e)
         return pd.DataFrame()
