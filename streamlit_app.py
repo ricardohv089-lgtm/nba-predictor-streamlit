@@ -2,18 +2,19 @@ import os, sys, pandas as pd, streamlit as st
 from nba_api.stats.static import teams
 import data_fetcher as df
 
-# --- Fix import path for Streamlit Cloud
 sys.path.append(os.path.dirname(__file__))
+st.set_page_config(page_title="🏀 NBA Public Stats Dashboard", layout="wide")
 
-st.set_page_config(page_title="🏀 NBA Public Data Dashboard", layout="wide")
-st.title("🏀 NBA Prediction System — 100 % Public Real Data")
+st.title("🏀 NBA Prediction System — Live & Historical Public Data Feeds")
 st.markdown("""
-Displays **live games**, **recent team performance**, and **past week final scores**
-using ESPN public feeds and NBA.com official stats — no API keys or simulations.
+All data comes from  
+- **ESPN open JSON scoreboards** for live and recent results  
+- **NBA.com official team stats** (`nba_api` backup mode)  
+100 % real and key‑free.
 """)
 
 # -------------------------------
-# TEAM SELECTOR (NBA.com Official)
+# TEAM SELECTOR
 # -------------------------------
 try:
     team_map = {t["full_name"]: t["id"] for t in teams.get_teams()}
@@ -21,41 +22,34 @@ except Exception as e:
     st.error(f"Failed to load teams: {e}")
     team_map = {}
 
-selected_team = st.sidebar.selectbox("Choose a team", list(team_map.keys()) or ["None"])
+selected_team = st.sidebar.selectbox("Select team:", list(team_map.keys()) or [])
 season = st.sidebar.text_input("Season (e.g. 2024‑25)", "2024‑25")
-
-# -------------------------------
-# LIVE SCOREBOARD (ESPN)
-# -------------------------------
-st.subheader("🏟️ Today’s ESPN Scoreboard")
-live_df = df.get_live_scoreboard()
-if live_df.empty:
-    st.info("No live or upcoming NBA games right now.")
-else:
-    st.dataframe(live_df, use_container_width=True)
-
-# -------------------------------
-# RECENT TEAM GAMES (NBA.com)
-# -------------------------------
-st.subheader(f"📊 Recent Games — {selected_team}")
 team_id = team_map.get(selected_team)
+
+# -------------------------------
+# TODAY’S LIVE GAMES (ESPN)
+# -------------------------------
+st.subheader("🏟️ Today's NBA Games — Live/Upcoming (ESPN)")
+live = df.get_live_scoreboard()
+st.dataframe(live if not live.empty else pd.DataFrame([{"Info": "No live or upcoming matches now."}]),
+             use_container_width=True)
+
+# -------------------------------
+# TEAM STATS (NBA.com, Fallback Safe)
+# -------------------------------
+st.subheader(f"📊 {selected_team} — Team Stats (Averages Per Game)")
 if not team_id:
     st.warning("Select a valid team.")
 else:
-    team_df = df.get_team_recent_games(team_id, season)
-    if team_df.empty:
-        st.info("No results returned for this team or season — NBA.com may be blocking requests.")
-    else:
-        st.dataframe(team_df, use_container_width=True)
+    team_data = df.get_team_recent_games(team_id, season)
+    st.dataframe(team_data, use_container_width=True)
 
 # -------------------------------
-# HISTORICAL (Last 7 Days ESPN)
+# PAST WEEK FINAL SCORES (ESPN)
 # -------------------------------
-st.subheader("📚 Final Scores — Last 7 Days (ESPN)")
-hist_df = df.get_historical_games()
-if hist_df.empty:
-    st.info("No past week results found — try again later when ESPN updates their feed.")
-else:
-    st.dataframe(hist_df, use_container_width=True)
+st.subheader("📚 Recent Final Scores (Last 7 Days — ESPN)")
+history = df.get_historical_games()
+st.dataframe(history if not history.empty else pd.DataFrame([{"Info": "No recent final scores available."}]),
+             use_container_width=True)
 
-st.caption("Data sources: NBA.com & ESPN public feeds (official, no auth required).")
+st.caption("Public ESPN and NBA.com feeds (auto fallback if blocked). No API keys or simulations.")
