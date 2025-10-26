@@ -2,17 +2,17 @@ import os, sys, streamlit as st, pandas as pd
 import data_fetcher as df
 from data_saver import collect_season_data
 import model_predictor as mp
+import model_trainer as trainer  # <— Added so retrain works
 
-# Ensure local modules resolve both locally and on Streamlit Cloud
+# Ensure local imports
 sys.path.append(os.path.dirname(__file__))
 
-st.set_page_config(page_title="🏀 NBA Prediction System — Full ML Dashboard", layout="wide")
+st.set_page_config(page_title="🏀 NBA Prediction System", layout="wide")
 
-st.title("🏀 NBA Prediction System — Real Public Data + Machine Learning Forecasts")
+st.title("🏀 NBA Prediction System — Real Data + Machine Learning Forecasts")
 st.markdown("""
-This app collects real **NBA data** from [ESPN public JSON feeds](https://site.web.api.espn.com)
-and applies a **stacked ensemble machine learning model** (XGBoost + Random Forest + Logistic Regression meta‑learner)
-to predict Moneyline outcomes.
+Fetch live NBA data, build a multi‑season dataset, and forecast Moneyline outcomes
+using a **stacked ensemble (XGBoost + Random Forest + Logistic Regression)**.
 """)
 
 # -------------------------------
@@ -41,33 +41,38 @@ else:
 st.subheader("🗂️ Collect and Save Full Dataset (3‑5 Seasons)")
 seasons_back = st.slider("How many seasons to collect ?", 3, 5, 5)
 if st.button("Collect Dataset"):
-    st.warning("Collecting multiple seasons... may take several minutes ⏳")
-    dataset = collect_season_data(seasons_back)
+    with st.spinner("Collecting multi‑season data..."):
+        dataset = collect_season_data(seasons_back)
     if not dataset.empty:
-        st.success(f"Data saved — {len(dataset)} games total ✅")
+        st.success(f"Data saved — {len(dataset)} games ✅")
         st.dataframe(dataset.head(20))
     else:
-        st.error("Collection failed. Check network availability or ESPN rate limit.")
+        st.error("Collection failed — check network or ESPN availability.")
 
 # -------------------------------
-# 4. MACHINE LEARNING PREDICTIONS
+# 4. TRAIN / RETRAIN MODELS
+# -------------------------------
+st.subheader("⚙️ Training / Retraining the Stacked Ensemble Model")
+if st.button("Retrain Models"):
+    with st.spinner("Training ensemble (XGB + RF + LR + Meta XGB)... ⏳"):
+        acc, auc, f1 = trainer.train_stacked_model()
+    st.success(f"Models trained and saved ✅ ACC:{acc:.2f} AUC:{auc:.2f} F1:{f1:.2f}")
+
+# -------------------------------
+# 5. PREDICTIONS
 # -------------------------------
 st.subheader("🤖 Predictions — Today’s Games (Moneyline Forecast)")
-
 try:
     if live_games.empty:
-        st.info("No live games to predict right now.")
+        st.info("No games available for prediction right now.")
     else:
-        prediction_table = mp.predict_today(live_games)
-        if prediction_table.empty:
-            st.info("Prediction features unavailable (check model files).")
+        preds = mp.predict_today(live_games)
+        if preds.empty:
+            st.warning("Prediction skipped — models might be missing. Train first above 👆")
         else:
-            st.dataframe(prediction_table, use_container_width=True)
-            st.success("Predictions generated ✅")
+            st.dataframe(preds, use_container_width=True)
+            st.success("Predictions generated ✅")
 except Exception as e:
     st.error(f"Prediction error: {e}")
 
-# -------------------------------
-# FOOTER
-# -------------------------------
-st.caption("All data from ESPN public feeds. Models trained locally on five seasons of real NBA data.")
+st.caption("Data from ESPN public feeds | Models trained with real multi‑season NBA data.")
