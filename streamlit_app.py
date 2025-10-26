@@ -1,44 +1,43 @@
 import os, sys, streamlit as st, pandas as pd
 import data_fetcher as df
+from data_saver import collect_season_data
 
 sys.path.append(os.path.dirname(__file__))
-st.set_page_config(page_title="🏀 NBA Public Data Dashboard", layout="wide")
 
-st.title("🏀 NBA Prediction System — Real Data Only (ESPN Feeds)")
+st.set_page_config(page_title="🏀 NBA Dataset Collector", layout="wide")
+st.title("🏀 NBA Data Collector & Real‑Time Dashboard (ESPN Open Feeds)")
+
 st.markdown("""
-Displays **live games**, **team records**, and **last‑week results** directly from  
-**ESPN’s open API** — no keys, no simulation, fully public and real.  
+Collect multi‑season NBA game data and analyze live results.  
+No API‑keys required; data fetched directly from ESPN public endpoints.
 """)
 
 # -------------------------------
-# SIDEBAR
+# LIVE GAMES SECTION
 # -------------------------------
-st.sidebar.header("Filter options")
-team_input = st.sidebar.text_input("Filter by team name (optional):", "")
-days_back = st.sidebar.slider("Past Days for History", 3, 10, 7)
+st.subheader("🏟️ Live / Upcoming Games ")
+live = df.get_live_scoreboard()
+st.dataframe(live if not live.empty else pd.DataFrame([{"Info": "No live games right now"}]), use_container_width=True)
 
 # -------------------------------
-# 1. Live Games (Today)
+# HISTORICAL PAST WEEK SECTION
 # -------------------------------
-st.subheader("🏟️ Live / Upcoming Games — ESPN")
-live_df = df.get_live_scoreboard()
-st.dataframe(live_df if not live_df.empty else pd.DataFrame([{"Info": "No live or upcoming games listed."}]),
-             use_container_width=True)
+st.subheader("📚 Past Week Final Scores")
+week = df.get_historical_games()
+st.dataframe(week if not week.empty else pd.DataFrame([{"Info": "No recent finals"}]), use_container_width=True)
 
 # -------------------------------
-# 2. Team Standings – Current Stats
+# DATA COLLECTION SECTION
 # -------------------------------
-st.subheader("📊 Team Records (Conference Standings – ESPN)")
-team_df = df.get_team_standings(team_input) if team_input else df.get_team_standings()
-st.dataframe(team_df if not team_df.empty else pd.DataFrame([{"Info": "No standings found or connection issue."}]),
-             use_container_width=True)
+st.subheader("🗂️ Collect and Save Full Dataset (3‑5 Seasons)")
+seasons_back = st.slider("How many seasons to collect ?", 3, 5, 5)
+if st.button("Collect Dataset"):
+    st.info(f"Collecting past {seasons_back} seasons — please wait a few minutes ⏳")
+    dataset = collect_season_data(seasons_back)
+    if not dataset.empty:
+        st.success(f"Saved {len(dataset)} games from {seasons_back} seasons ✅")
+        st.dataframe(dataset.head(25))
+    else:
+        st.error("Failed to collect data — check connection or ESPN availability.")
 
-# -------------------------------
-# 3. Historical Results (last 7 days)
-# -------------------------------
-st.subheader("📚 Final Scores – Last Week (ESPN)")
-hist = df.get_historical_games(days_back)
-st.dataframe(hist if not hist.empty else pd.DataFrame([{"Info": "No recent final scores."}]),
-             use_container_width=True)
-
-st.caption("Data from ESPN public JSON feed – official results mirroring ESPN.com scoreboards.")
+st.caption("All data imported from ESPN open JSON feeds (official public source).")
