@@ -1,8 +1,12 @@
-import os, sys, streamlit as st, pandas as pd
+import os
+import sys
+import streamlit as st
+import pandas as pd
+
 import data_fetcher as df
 from data_saver import collect_season_data
 import model_predictor as mp
-import model_trainer as trainer  # <— Added so retrain works
+import model_trainer as trainer
 
 # Ensure local imports
 sys.path.append(os.path.dirname(__file__))
@@ -40,12 +44,24 @@ else:
 # -------------------------------
 st.subheader("🗂️ Collect and Save Full Dataset (3‑5 Seasons)")
 seasons_back = st.slider("How many seasons to collect ?", 3, 5, 5)
+
 if st.button("Collect Dataset"):
+    progress_bar = st.progress(0.0)
+    def prog_cb(frac):
+        progress_bar.progress(frac)
     with st.spinner("Collecting multi‑season data..."):
-        dataset = collect_season_data(seasons_back)
+        dataset = collect_season_data(seasons_back, progress_cb=prog_cb)
+    progress_bar.empty()
     if not dataset.empty:
         st.success(f"Data saved — {len(dataset)} games ✅")
-        st.dataframe(dataset.head(20))
+        st.dataframe(dataset, use_container_width=True)
+        csv_bytes = dataset.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Download Full Dataset (CSV)",
+            csv_bytes,
+            file_name="nba_games_5yr.csv",
+            mime="text/csv"
+        )
     else:
         st.error("Collection failed — check network or ESPN availability.")
 
@@ -75,4 +91,4 @@ try:
 except Exception as e:
     st.error(f"Prediction error: {e}")
 
-st.caption("Data from ESPN public feeds | Models trained with real multi‑season NBA data.")
+st.caption("Data from ESPN public feeds | Models trained with real multi-season NBA data.")
