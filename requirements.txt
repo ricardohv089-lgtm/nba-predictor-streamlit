@@ -1,5 +1,7 @@
-streamlit>=1.27.0
 streamlit
 pandas
+numpy
+joblib
+xgboost
+scikit-learn
 requests
-nba_api
