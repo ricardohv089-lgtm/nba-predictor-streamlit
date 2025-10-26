@@ -1,14 +1,14 @@
 import os, requests, pandas as pd
 from datetime import datetime, timedelta
 
-# Permanent dataset directory within repo
+# Path to permanent /data folder in repo
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def collect_season_data(seasons_back=5):
     """
-    Collect all NBA games from ESPN open API for past N seasons.
-    Automatically saves the CSV inside ./data/ folder (persistent in GitHub repo).
+    Collect NBA games from ESPN JSON API for past N seasons.
+    Saves complete dataset to ./data/nba_games_5yr.csv (no row truncation).
     """
     all_games = []
     today = datetime.today()
@@ -22,7 +22,10 @@ def collect_season_data(seasons_back=5):
             date = start
             while date <= end:
                 date_str = date.strftime("%Y%m%d")
-                url = f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={date_str}"
+                url = (
+                    f"https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/"
+                    f"scoreboard?dates={date_str}"
+                )
                 resp = requests.get(url, timeout=10)
                 if resp.status_code == 200:
                     for evt in resp.json().get("events", []):
@@ -40,11 +43,10 @@ def collect_season_data(seasons_back=5):
                         })
                 date += timedelta(days=1)
 
-        # build dataframe & save
         df = pd.DataFrame(all_games)
         saved_file = os.path.join(DATA_DIR, "nba_games_5yr.csv")
         df.to_csv(saved_file, index=False)
-        print(f"✅ Saved {len(df)} games to {saved_file}")
+        print(f"✅ Saved ALL {len(df)} games → {saved_file}")
         return df
 
     except Exception as e:
