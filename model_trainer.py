@@ -83,7 +83,6 @@ def train_stacked_model(input_csv="data/features_ready.csv", models_dir="models"
         n_estimators=200, max_depth=8, random_state=42, n_jobs=-1
     )
     model_lr = LogisticRegression(max_iter=1000, solver="liblinear")
-
     base_models = [("xgb", model_xgb), ("rf", model_rf), ("lr", model_lr)]
 
     # Out-of-fold meta features
