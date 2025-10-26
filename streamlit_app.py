@@ -1,15 +1,11 @@
-import os
-import sys
-import streamlit as st
-import pandas as pd
-
+import os, sys, streamlit as st, pandas as pd
 import data_fetcher as df
 from data_saver import collect_season_data
 import model_predictor as mp
 import model_trainer as trainer
 
-# Ensure local imports
-sys.path.append(os.path.dirname(__file__))
+file_dir = os.path.dirname(__file__)
+sys.path.append(file_dir)
 
 st.set_page_config(page_title="🏀 NBA Prediction System", layout="wide")
 
@@ -66,7 +62,17 @@ if st.button("Collect Dataset"):
         st.error("Collection failed — check network or ESPN availability.")
 
 # -------------------------------
-# 4. TRAIN / RETRAIN MODELS
+# 4. BUILD FEATURES (NEW SECTION)
+# -------------------------------
+st.subheader("🧮 Build Features From Dataset")
+if st.button("Build Features File"):
+    with st.spinner("Building model-ready features..."):
+        feats = trainer.build_features()
+    st.success(f"Features file created ({len(feats)} rows) and saved as data/features_ready.csv ✅")
+    st.dataframe(feats.head(25), use_container_width=True)
+
+# -------------------------------
+# 5. TRAIN / RETRAIN MODELS
 # -------------------------------
 st.subheader("⚙️ Training / Retraining the Stacked Ensemble Model")
 if st.button("Retrain Models"):
@@ -75,7 +81,7 @@ if st.button("Retrain Models"):
     st.success(f"Models trained and saved ✅ ACC:{acc:.2f} AUC:{auc:.2f} F1:{f1:.2f}")
 
 # -------------------------------
-# 5. PREDICTIONS
+# 6. PREDICTIONS
 # -------------------------------
 st.subheader("🤖 Predictions — Today’s Games (Moneyline Forecast)")
 try:
